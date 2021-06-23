@@ -26,7 +26,6 @@
                                     <field name="owner_id"/>
                                     <field name="zone_name"/>
                                     <field name="sewage_records"/>
-                                    <field name="owner_email"/>
                                 </tree>
                        </field>
                    </page>

@@ -16,16 +16,16 @@ class customer_property(models.Model):
     zone_name = fields.Char(string="Zone Name")
     sewage_records = fields.Char(string="Sewage Tank Records")
     owner_id = fields.Many2one('res.partner', string="Property Owner")
-    owner_email = fields.Char(string="Owner Email")
+    customer_id = fields.Char()
 
 class pooplogg_customer(models.Model):
     _inherit = 'res.partner'
     
-#     customer_id = fields.Char()
-#     category = fields.Selection([('customer', 'Customer'), ('partner', 'Partner')], 'Category')
     properties = fields.One2many('customer.property', 'owner_id', store=True, string="Properties")
-#     driver_id = fields.Char()
-#     truck_id = fields.Char()
+    truck_id = fields.Char()
+    customer_id = fields.Char()
+    category = fields.Selection([('customer', 'Customer'), ('partner', 'Partner')], 'Category')
+    driver_id = fields.Char()
     
     @api.model
     def get_properties(self): 
@@ -33,7 +33,7 @@ class pooplogg_customer(models.Model):
         domain=[('owner_id', '=', self.id)]
         property = self.env['customer.property'].search(domain)
         for rec in property:
-            properties.append((0,0, {'property_name':rec.property_name, 'address':rec.address, 'zone_name':rec.zone_name, 'owner_id': rec.id, 'sewage_records':rec.sewage_records, 'owner_email':rec.owner_email}))
+            properties.append((0,0, {'property_name':rec.property_name, 'address':rec.address, 'zone_name':rec.zone_name, 'owner_id': rec.id, 'sewage_records':rec.sewage_records, 'customer_id':rec.customer_id}))
         self.update({'properties': properties})
 
 class partner_price(models.Model):
