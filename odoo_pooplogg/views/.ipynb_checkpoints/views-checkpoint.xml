@@ -12,15 +12,25 @@
             </xpath>
         </field>
     </record>
-      
-    <record id="partner_price" model="ir.ui.view">
-        <field name="name">partner.price</field>
-        <field name="model">product.product</field>
-        <field name="inherit_id" ref="product.product_normal_form_view" />
+    <record id="customer_property" model="ir.ui.view">
+        <field name="name">customer.property</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form" />
         <field name="arch" type="xml">
-            <xpath expr="//field[@name='lst_price']" position="after">
-                <field name="partner_price" />
-            </xpath>
+             <xpath expr="//page[@name='internal_notes']" position="after">
+                   <page name="properties" string="Properties">
+                           <field name="properties" force_save="1">
+                               <tree >
+                                    <field name="property_name"/>
+                                    <field name="address"/>
+                                    <field name="owner_id"/>
+                                    <field name="zone_name"/>
+                                    <field name="sewage_records"/>
+                                    <field name="owner_email"/>
+                                </tree>
+                       </field>
+                   </page>
+             </xpath>
         </field>
     </record>
       
