@@ -12,20 +12,61 @@ class customer_property(models.Model):
     _description = 'Customer Property'
     
     property_name = fields.Char(string="Name")
+    property_id = fields.Char(string="Property ID")
     address = fields.Char(string="Address")
     zone_name = fields.Char(string="Zone Name")
-    sewage_records = fields.Char(string="Sewage Tank Records")
+    sewage_records = fields.Char(string="Sewage Records")
     owner_id = fields.Many2one('res.partner', string="Property Owner")
     customer_id = fields.Char()
+    manager_id = fields.Many2one('res.partner', string="Property Manager")
+    
+    @api.model
+    def assign_owner(self, id):
+        record = self.search([('id', '=', id)])
+        for rec in record:
+            owner = self.env['res.partner'].search([('customer_id', '=', rec.customer_id)])
+            rec.owner_id = owner.id
+            
+class property_zone(models.Model):
+    _name = 'property.zone'
+    _description = 'Property Zone'
+    
+    name = fields.Char(string="Name")
+    
+class evacuation_category(models.Model):
+    _name = 'evacuation.category'
+    _description = 'Evacuation Category'
+    
+    name = fields.Char(string="Name")
+        
+        
 
 class pooplogg_customer(models.Model):
     _inherit = 'res.partner'
     
     properties = fields.One2many('customer.property', 'owner_id', store=True, string="Properties")
     truck_id = fields.Char()
-    customer_id = fields.Char()
-    category = fields.Selection([('customer', 'Customer'), ('partner', 'Partner')], 'Category')
+    customer_id = fields.Char(string="PAS ID")
+    category = fields.Selection([('customer', 'Customer'), ('partner', 'Partner'), ('manager', 'Manager')], 'Category')
     driver_id = fields.Char()
+#     wallet = fields.Float(string="Wallet Balance")
+
+    @api.model
+    def set_company(self, id):
+        record = self.search([('id', '=', id)])
+        for rec in record:
+            if(rec.customer_id):
+                tag = self.env['res.partner.category'].search([('name','=',record.category)])
+                rec.write({'category_id':[(tag.id)]})
+                rec.company_id = 2
+                rec.customer_rank = 1
+                
+    @api.onchange('category')
+    def customer_categ(self):
+        for record in self:
+            if (record.category):
+                tag = self.env['res.partner.category'].search([('name','=',record.category)])
+                record.write({'category_id':[(tag.id)]})
     
     @api.model
     def get_properties(self): 
@@ -33,70 +74,107 @@ class pooplogg_customer(models.Model):
         domain=[('owner_id', '=', self.id)]
         property = self.env['customer.property'].search(domain)
         for rec in property:
-            properties.append((0,0, {'property_name':rec.property_name, 'address':rec.address, 'zone_name':rec.zone_name, 'owner_id': rec.id, 'sewage_records':rec.sewage_records, 'customer_id':rec.customer_id}))
+            properties.append((0,0, {'property_name':rec.property_name, 'property_id':rec.property_id, 'address':rec.address, 'zone_name':rec.zone_name, 'owner_id': rec.id, 'sewage_records':rec.sewage_records, 'customer_id':rec.customer_id}))
         self.update({'properties': properties})
 
 class partner_price(models.Model):
     _inherit = 'product.product'
     
     partner_price = fields.Float(string="Partner Price")
+    zone = fields.Many2one('property.zone', string="Location Zone")
+    evac_categ = fields.Many2one('evacuation.category', string="Evacuation Category")
 
 class payment(models.Model):
     _inherit = 'account.payment'
     
-    product_id = fields.Many2one('product.product', string="Product")
+    truck_owner_id = fields.Char()
     truck_owner = fields.Many2one('res.partner', string="Truck Owner")
-    manager = fields.Many2one('res.partner', string="Manager")
-    
+    customer_id = fields.Char()
+    truck_id = fields.Char()
+    property_id = fields.Char()
+    property_zone = fields.Char()
+    product_type = fields.Char()
+    evac_category = fields.Char()
+    payment_method = fields.Char()
+    addon = fields.Char()
+    addon_amount = fields.Float()
+    sewage_volume = fields.Float()
     
     @api.model
-    def create_invoice(self, name):
-        record = self.search([('name', '=', name)])
+    def update_payment(self, id):
+        record = self.search([('id', '=', id)])
         for rec in record:
-            if(rec.payment_type == 'inbound' and rec.truck_owner and rec.product_id):
-                product = rec.product_id
-                journal = self.env['account.journal'].search([('company_id', '=', rec.company_id.id), ('code', '=', 'INV')])
+            if( rec.truck_owner_id and rec.customer_id):
+                rec.payment_type = 'inbound'
+                rec.partner_type = 'customer'
+                payment_journal = self.env['account.journal'].search([('name', '=', rec.payment_method)])
+                rec.journal_id = payment_journal.id
+                customer = self.env['res.partner'].search([('customer_id', '=', rec.customer_id)])
+                truck_owner = self.env['res.partner'].search([('customer_id', '=', rec.truck_owner_id)])
+                rec.partner_id = customer.id
+                rec.truck_owner = truck_owner.id
+                
+    @api.model
+    def create_invoice(self, id):
+        record = self.search([('id', '=', id)])
+        for rec in record:
+            if(rec.truck_owner_id and rec.customer_id):
+                category = self.env['product.category'].search([('name', '=', rec.product_type)])
+                zone = self.env['property.zone'].search([('name', '=', rec.property_zone)])
+                evac_categ = self.env['evacuation.category'].search([('name', '=', rec.evac_category)])
+                product = self.env['product.product'].search([('categ_id', '=', category.id),('zone','=', zone.id),('evac_categ', '=', evac_categ.id)])
+                journal = self.env['account.journal'].search([('company_id', '=', 2), ('code', '=', 'INV')])
                 invoice_line_ids = []
-                invoice_line_ids.append((0,0,{'product_id':product.id, 'account_id':rec.product_id.categ_id.property_account_income_categ_id.id, 'price_unit':rec.product_id.lst_price, 'quantity':1}))
-                vals = {'partner_id':rec.partner_id.id, 'journal_id':journal.id,'company_id':rec.company_id.id, 'move_type':'out_invoice', 'invoice_line_ids':invoice_line_ids}
+                invoice_line_ids.append((0,0,{'product_id':product.id, 'account_id':product.categ_id.property_account_income_categ_id.id, 'price_unit':product.lst_price, 'quantity':1}))
+                
+                if (rec.addon):
+                    invoice_line_ids.append((0,0,{'name':rec.addon, 'account_id':product.categ_id.property_account_income_categ_id.id, 'price_unit':rec.addon_amount, 'quantity':1}))
+                
+                vals = {'partner_id':rec.partner_id, 'journal_id':journal.id,'company_id':2, 'move_type':'out_invoice', 'invoice_line_ids':invoice_line_ids}
                 invoice = self.env['account.move'].create(vals)
                 invoice.action_post()
                 rec.action_post()
                 
     @api.model
-    def create_journal(self, name):
-        record = self.search([('name', '=', name)])
+    def partner_split(self, id):
+        record = self.search([('id', '=', id)])
         for rec in record:
-            if(rec.payment_type == 'inbound' and rec.truck_owner and rec.product_id):
-                product = rec.product_id
+            if(rec.truck_owner_id and rec.customer_id):
+                truck_owner = self.env['res.partner'].search([('customer_id', '=', rec.truck_owner_id)])
+                category = self.env['product.category'].search([('name', '=', rec.product_type)])
+                zone = self.env['property.zone'].search([('name', '=', rec.property_zone)])
+                evac_categ = self.env['evacuation.category'].search([('name', '=', rec.evac_category)])
+                product = self.env['product.product'].search([('categ_id', '=', category.id),('zone','=', zone.id),('evac_categ', '=', evac_categ.id)])
                 vat = round((product.lst_price * 0.075), 2)
                 net = product.lst_price - vat
-                partner_earning = rec.product_id.partner_price
-                partner_account = rec.truck_owner.property_account_payable_id.id
-                loggycraft = self.env['res.partner'].search([('name', '=', 'Loggycraft')])    
+                partner_earning = product.partner_price
+                partner_account = truck_owner.property_account_payable_id.id
+                loggycraft = self.env['res.partner'].search([('name', '=', 'Loggykraft')])    
                 loggycraft_earning = round(((net - partner_earning) * 0.3), 2)
                 loggycraft_account = loggycraft.property_account_payable_id.id
                 vat_account = self.env['account.account'].search([('name', '=', 'VAT Payable')])
                 
                 line_ids = []
-                line_ids.append((0,0,{'account_id':450, 'partner_id':rec.truck_owner.id, 'credit':partner_earning}))
-                line_ids.append((0,0,{'account_id':450, 'partner_id':loggycraft.id, 'credit':loggycraft_earning}))
+                line_ids.append((0,0,{'account_id':partner_account, 'partner_id':rec.truck_owner.id, 'credit':partner_earning}))
+                line_ids.append((0,0,{'account_id':loggycraft_account, 'partner_id':loggycraft.id, 'credit':loggycraft_earning}))
                 line_ids.append((0,0,{'account_id':vat_account.id,  'credit':vat}))
                 
-                if (rec.manager):
-                    manager = rec.manager.id
-                    manager_account = rec.manager.property_account_payable_id.id
+                property = self.env['customer.property'].search([('property_id', '=', rec.property_id)])
+                
+                if (property.manager_id):
+                    manager = property.manager_id.id
+                    manager_account = property.manager_id.property_account_payable_id.id
                     manager_earning = round(((net - partner_earning) * 0.02), 2)
                     expense = partner_earning + loggycraft_earning + manager_earning + vat                                
-                    line_ids.append((0,0,{'account_id':450, 'partner_id':manager, 'credit':manager_earning}))
+                    line_ids.append((0,0,{'account_id':manager_account, 'partner_id':manager, 'credit':manager_earning}))
                 
                 else:
                    expense = partner_earning + loggycraft_earning + vat
                 
-                expense_account = rec.product_id.categ_id.property_account_expense_categ_id.id
-                line_ids.append((0,0,{'account_id':454, 'debit':expense}))
-                journal = self.env['account.journal'].search([('company_id', '=', rec.company_id.id), ('code', '=', 'MISC')])
-                vals = {'ref':rec.ref + " - partners' share", 'company_id':rec.company_id.id, 'journal_id':journal.id, 'move_type':'entry', 'line_ids':line_ids}
+                expense_account = product.categ_id.property_account_expense_categ_id.id
+                line_ids.append((0,0,{'account_id':expense_account, 'debit':expense}))
+                journal = self.env['account.journal'].search([('company_id', '=', 2), ('code', '=', 'MISC')])
+                vals = {'ref':rec.ref + " - partners' share", 'company_id':2, 'journal_id':journal.id, 'move_type':'entry', 'line_ids':line_ids}
                 _logger.info(vals)
                 journal = self.env['account.move'].create(vals)
                 journal.action_post()

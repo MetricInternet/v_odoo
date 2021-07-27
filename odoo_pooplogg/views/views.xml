@@ -6,9 +6,7 @@
         <field name="inherit_id" ref="account.view_account_payment_form" />
         <field name="arch" type="xml">
             <xpath expr="//field[@name='partner_bank_id']" position="after">
-                <field name="product_id" />
                 <field name="truck_owner" />
-                <field name="manager" />
             </xpath>
         </field>
     </record>
@@ -18,18 +16,23 @@
         <field name="inherit_id" ref="base.view_partner_form" />
         <field name="arch" type="xml">
              <xpath expr="//page[@name='internal_notes']" position="after">
-                   <page name="properties" string="Properties">
+                   <page name="properties" string="Properties" attrs="{'invisible':[('supplier_rank', '>', '0')]}">
                            <field name="properties" force_save="1">
                                <tree >
                                     <field name="property_name"/>
+                                   <field name="property_id"/>
                                     <field name="address"/>
-                                    <field name="owner_id"/>
                                     <field name="zone_name"/>
                                     <field name="sewage_records"/>
                                 </tree>
                        </field>
                    </page>
              </xpath>
+            <xpath expr="//field[@name='category_id']" position="after">
+                <field name="supplier_rank" invisible= "1"/>
+                <field name="category" attrs="{'invisible':[('supplier_rank', '>', '0')]}"/>
+                <field name="truck_id" attrs="{'invisible':[('supplier_rank', '>', '0')]}"/>
+            </xpath>
         </field>
     </record>
       
