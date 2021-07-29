@@ -17,7 +17,7 @@ class customer_property(models.Model):
     zone_name = fields.Char(string="Zone Name")
     sewage_records = fields.Char(string="Sewage Records")
     owner_id = fields.Many2one('res.partner', string="Property Owner")
-    customer_id = fields.Char()
+    customer_id = fields.Char(string="Customer ID")
     manager_id = fields.Many2one('res.partner', string="Property Manager")
     
     @api.model
@@ -39,17 +39,41 @@ class evacuation_category(models.Model):
     
     name = fields.Char(string="Name")
         
-        
+class customer_wallet(models.Model):
+    _name = 'customer.wallet'
+    _description = 'Customer Wallet'
+    
+    date = fields.Date(
+        string='Date',
+        required=True,
+        index=True,
+        readonly=True,
+        copy=False,
+        default=fields.Date.context_today
+    )
+    type = fields.Selection([('credit', 'CREDIT'), ('debit', 'DEBIT')], 'Type')
+    amount = fields.Float(string="Amount")
+    payment_id = fields.Char(string="Payment")
+    customer = fields.Many2one('res.partner', string="Customer")
+    customer_id = fields.Char(string="Customer ID")
+    
+    @api.model
+    def assign_customer(self, id):
+        record = self.search([('id', '=', id)])
+        for rec in record:
+            customer = self.env['res.partner'].search([('customer_id', '=', rec.customer_id)])
+            rec.customer = customer.id      
 
 class pooplogg_customer(models.Model):
     _inherit = 'res.partner'
     
     properties = fields.One2many('customer.property', 'owner_id', store=True, string="Properties")
+    transactions = fields.One2many('customer.wallet', 'customer', store=True, string="Wallet Transactions")
     truck_id = fields.Char()
     customer_id = fields.Char(string="PAS ID")
     category = fields.Selection([('customer', 'Customer'), ('partner', 'Partner'), ('manager', 'Manager')], 'Category')
     driver_id = fields.Char()
-#     wallet = fields.Float(string="Wallet Balance")
+    wallet = fields.Float(string="Wallet Balance")
 
     @api.model
     def set_company(self, id):
@@ -76,6 +100,15 @@ class pooplogg_customer(models.Model):
         for rec in property:
             properties.append((0,0, {'property_name':rec.property_name, 'property_id':rec.property_id, 'address':rec.address, 'zone_name':rec.zone_name, 'owner_id': rec.id, 'sewage_records':rec.sewage_records, 'customer_id':rec.customer_id}))
         self.update({'properties': properties})
+        
+    @api.model
+    def get_wallet_transactions(self): 
+        wallet = []
+        domain=[('customer', '=', self.id)]
+        transactions = self.env['customer.wallet'].search(domain)
+        for rec in transactions:
+            wallet.append((0,0, {'date':rec.date, 'type':rec.type, 'amount':rec.amount, 'payment_id':rec.payment_id}))
+        self.update({'transactions': wallet})
 
 class partner_price(models.Model):
     _inherit = 'product.product'
@@ -104,7 +137,7 @@ class payment(models.Model):
     def update_payment(self, id):
         record = self.search([('id', '=', id)])
         for rec in record:
-            if( rec.truck_owner_id and rec.customer_id):
+            if(rec.truck_owner_id and rec.customer_id):
                 rec.payment_type = 'inbound'
                 rec.partner_type = 'customer'
                 payment_journal = self.env['account.journal'].search([('name', '=', rec.payment_method)])
@@ -113,6 +146,14 @@ class payment(models.Model):
                 truck_owner = self.env['res.partner'].search([('customer_id', '=', rec.truck_owner_id)])
                 rec.partner_id = customer.id
                 rec.truck_owner = truck_owner.id
+                
+            if (rec.customer_id and rec.product_type == 'WALLET'):
+                rec.payment_type = 'inbound'
+                rec.partner_type = 'customer'
+                payment_journal = self.env['account.journal'].search([('name', '=', rec.payment_method)])
+                rec.journal_id = payment_journal.id
+                customer = self.env['res.partner'].search([('customer_id', '=', rec.customer_id)])
+                rec.partner_id = customer.id
                 
     @api.model
     def create_invoice(self, id):
@@ -135,6 +176,39 @@ class payment(models.Model):
                 invoice.action_post()
                 rec.action_post()
                 
+            if(rec.customer_id and rec.product_type == 'WALLET'):
+                category = self.env['product.category'].search([('name', '=', rec.product_type)])
+                product = self.env['product.product'].search([('categ_id', '=', category.id)])
+                journal = self.env['account.journal'].search([('company_id', '=', 2), ('code', '=', 'INV')])
+                invoice_line_ids = []
+                invoice_line_ids.append((0,0,{'product_id':product.id, 'account_id':product.categ_id.property_account_income_categ_id.id, 'price_unit':rec.amount, 'quantity':1}))
+                
+                vals = {'partner_id':rec.partner_id, 'journal_id':journal.id,'company_id':2, 'move_type':'out_invoice', 'invoice_line_ids':invoice_line_ids}
+                invoice = self.env['account.move'].create(vals)
+                invoice.action_post()
+                rec.action_post()
+                
+#     Wallet Transactions            
+    @api.model
+    def fund_wallet(self, id):
+        record = self.search([('id', '=', id)])
+        for rec in record:
+            if(rec.customer_id and rec.product_type == 'WALLET'):
+                wallet_vals = {'customer_id':rec.customer_id, 'type':'credit','amount':rec.amount, 'payment_id':rec.ref}
+                self.env['customer.wallet'].create(wallet_vals)
+                rec.partner_id.wallet += rec.amount
+                
+    @api.model
+    def deduct_wallet(self, id):
+        record = self.search([('id', '=', id)])
+        for rec in record:
+            if(rec.truck_owner_id and rec.customer_id and rec.payment_method == 'WALLET'):
+                wallet_vals = {'customer_id':rec.customer_id, 'type':'debit','amount':rec.amount, 'payment_id':rec.ref}
+                self.env['customer.wallet'].create(wallet_vals)
+                rec.partner_id.wallet -= rec.amount
+                
+        
+#     Payment Split between partners         
     @api.model
     def partner_split(self, id):
         record = self.search([('id', '=', id)])
@@ -178,4 +252,5 @@ class payment(models.Model):
                 _logger.info(vals)
                 journal = self.env['account.move'].create(vals)
                 journal.action_post()
+        
     
