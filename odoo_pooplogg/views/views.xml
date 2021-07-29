@@ -28,6 +28,18 @@
                        </field>
                    </page>
              </xpath>
+            <xpath expr="//page[@name='internal_notes']" position="after">
+                   <page name="wallet" string="Wallet Transactions" attrs="{'invisible':[('supplier_rank', '>', '0')]}">
+                           <field name="transactions" force_save="1">
+                               <tree >
+                                    <field name="payment_id"/>
+                                   <field name="date"/>
+                                    <field name="type"/>
+                                    <field name="amount"/>
+                                </tree>
+                       </field>
+                   </page>
+             </xpath>
             <xpath expr="//field[@name='category_id']" position="after">
                 <field name="supplier_rank" invisible= "1"/>
                 <field name="category" attrs="{'invisible':[('supplier_rank', '>', '0')]}"/>
