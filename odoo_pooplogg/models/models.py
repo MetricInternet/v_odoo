@@ -25,7 +25,8 @@ class customer_property(models.Model):
         record = self.search([('id', '=', id)])
         for rec in record:
             owner = self.env['res.partner'].search([('customer_id', '=', rec.customer_id)])
-            rec.owner_id = owner.id
+            if owner:
+                rec.owner_id = owner.id
             
 class property_zone(models.Model):
     _name = 'property.zone'
@@ -62,7 +63,21 @@ class customer_wallet(models.Model):
         record = self.search([('id', '=', id)])
         for rec in record:
             customer = self.env['res.partner'].search([('customer_id', '=', rec.customer_id)])
-            rec.customer = customer.id      
+            if customer:
+                rec.customer = customer.id   
+            
+            
+class pooplogg_customer(models.Model):
+    _inherit = 'res.partner.bank'
+
+    customer_id = fields.Char(string="PAS ID")
+    
+    @api.model
+    def assign_customer(self, id):
+        record = self.search([('id', '=', id)])
+        for rec in record:
+            customer = self.env['res.partner'].search([('customer_id', '=', rec.customer_id)])
+            rec.partenr_id = customer.id
 
 class pooplogg_customer(models.Model):
     _inherit = 'res.partner'
@@ -83,7 +98,10 @@ class pooplogg_customer(models.Model):
                 tag = self.env['res.partner.category'].search([('name','=',record.category)])
                 rec.write({'category_id':[(tag.id)]})
                 rec.company_id = 2
-                rec.customer_rank = 1
+                if rec.category == 'customer':
+                    rec.customer_rank = 1
+                else:
+                    rec.supplier_rank = 1
                 
     @api.onchange('category')
     def customer_categ(self):
@@ -116,6 +134,11 @@ class partner_price(models.Model):
     partner_price = fields.Float(string="Partner Price")
     zone = fields.Many2one('property.zone', string="Location Zone")
     evac_categ = fields.Many2one('evacuation.category', string="Evacuation Category")
+    
+class account_journal(models.Model):
+    _inherit = 'account.journal'
+    
+    payment_method = fields.Selection([('CASH', 'CASH'), ('CARD', 'CARD'), ('WALLET', 'WALLET')], 'Payment Method')
 
 class payment(models.Model):
     _inherit = 'account.payment'
@@ -140,7 +163,7 @@ class payment(models.Model):
             if(rec.truck_owner_id and rec.customer_id):
                 rec.payment_type = 'inbound'
                 rec.partner_type = 'customer'
-                payment_journal = self.env['account.journal'].search([('name', '=', rec.payment_method)])
+                payment_journal = self.env['account.journal'].search([('payment_method', '=', rec.payment_method)])
                 rec.journal_id = payment_journal.id
                 customer = self.env['res.partner'].search([('customer_id', '=', rec.customer_id)])
                 truck_owner = self.env['res.partner'].search([('customer_id', '=', rec.truck_owner_id)])
@@ -150,7 +173,7 @@ class payment(models.Model):
             if (rec.customer_id and rec.product_type == 'WALLET'):
                 rec.payment_type = 'inbound'
                 rec.partner_type = 'customer'
-                payment_journal = self.env['account.journal'].search([('name', '=', rec.payment_method)])
+                payment_journal = self.env['account.journal'].search([('payment_method', '=', rec.payment_method)])
                 rec.journal_id = payment_journal.id
                 customer = self.env['res.partner'].search([('customer_id', '=', rec.customer_id)])
                 rec.partner_id = customer.id

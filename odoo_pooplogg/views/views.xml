@@ -42,11 +42,20 @@
              </xpath>
             <xpath expr="//field[@name='category_id']" position="after">
                 <field name="supplier_rank" invisible= "1"/>
-                <field name="category" attrs="{'invisible':[('supplier_rank', '>', '0')]}"/>
+                <field name="category"/>
                 <field name="truck_id" attrs="{'invisible':[('supplier_rank', '>', '0')]}"/>
             </xpath>
         </field>
     </record>
-      
+        <record id="payment_method_view" model="ir.ui.view">
+        <field name="name">payment.method</field>
+        <field name="model">account.journal</field>
+        <field name="inherit_id" ref="account.view_account_journal_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='currency_id']" position="after">
+                <field name="payment_method" />
+            </xpath>
+        </field>
+    </record>  
   </data>
 </odoo>
