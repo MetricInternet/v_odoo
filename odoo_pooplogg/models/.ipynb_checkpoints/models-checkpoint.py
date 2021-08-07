@@ -67,17 +67,24 @@ class customer_wallet(models.Model):
                 rec.customer = customer.id   
             
             
-class pooplogg_customer(models.Model):
+class partner_bank(models.Model):
     _inherit = 'res.partner.bank'
 
     customer_id = fields.Char(string="PAS ID")
+    bank_code = fields.Char(string = "Bank Code")
+    partner_id = fields.Many2one('res.partner', 'Account Holder', ondelete='cascade', index=True, domain=['|', ('is_company', '=', True), ('parent_id', '=', False)], required=False)
     
     @api.model
-    def assign_customer(self, id):
+    def assign_bank(self, id):
         record = self.search([('id', '=', id)])
         for rec in record:
-            customer = self.env['res.partner'].search([('customer_id', '=', rec.customer_id)])
-            rec.partenr_id = customer.id
+            if (rec.customer_id):
+                customer = self.env['res.partner'].search([('customer_id', '=', rec.customer_id)])
+                rec.partner_id = customer.id
+            if (rec.bank_code):
+                bank = self.env['res.bank'].search([('bic', '=', rec.bank_code)])
+                rec.bank_id = bank.id
+            
 
 class pooplogg_customer(models.Model):
     _inherit = 'res.partner'
@@ -96,7 +103,8 @@ class pooplogg_customer(models.Model):
         for rec in record:
             if(rec.customer_id):
                 tag = self.env['res.partner.category'].search([('name','=',record.category)])
-                rec.write({'category_id':[(tag.id)]})
+                if tag:
+                    rec.write({'category_id':[(tag.id)]})
                 rec.company_id = 2
                 if rec.category == 'customer':
                     rec.customer_rank = 1
@@ -108,7 +116,8 @@ class pooplogg_customer(models.Model):
         for record in self:
             if (record.category):
                 tag = self.env['res.partner.category'].search([('name','=',record.category)])
-                record.write({'category_id':[(tag.id)]})
+                if tag:
+                    record.write({'category_id':[(tag.id)]})
     
     @api.model
     def get_properties(self): 
@@ -164,19 +173,24 @@ class payment(models.Model):
                 rec.payment_type = 'inbound'
                 rec.partner_type = 'customer'
                 payment_journal = self.env['account.journal'].search([('payment_method', '=', rec.payment_method)])
-                rec.journal_id = payment_journal.id
+                if payment_journal:
+                    rec.journal_id = payment_journal.id
                 customer = self.env['res.partner'].search([('customer_id', '=', rec.customer_id)])
                 truck_owner = self.env['res.partner'].search([('customer_id', '=', rec.truck_owner_id)])
-                rec.partner_id = customer.id
-                rec.truck_owner = truck_owner.id
+                if customer:
+                    rec.partner_id = customer.id
+                if truck_owner:
+                    rec.truck_owner = truck_owner.id
                 
             if (rec.customer_id and rec.product_type == 'WALLET'):
                 rec.payment_type = 'inbound'
                 rec.partner_type = 'customer'
                 payment_journal = self.env['account.journal'].search([('payment_method', '=', rec.payment_method)])
-                rec.journal_id = payment_journal.id
+                if payment_journal:
+                    rec.journal_id = payment_journal.id
                 customer = self.env['res.partner'].search([('customer_id', '=', rec.customer_id)])
-                rec.partner_id = customer.id
+                if customer:
+                    rec.partner_id = customer.id
                 
     @api.model
     def create_invoice(self, id):
