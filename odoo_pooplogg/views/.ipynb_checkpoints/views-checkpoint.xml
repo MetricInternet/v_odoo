@@ -42,8 +42,10 @@
              </xpath>
             <xpath expr="//field[@name='category_id']" position="after">
                 <field name="supplier_rank" invisible= "1"/>
+                <field name="customer_rank" invisible= "1"/>
                 <field name="category"/>
-                <field name="truck_id" attrs="{'invisible':[('supplier_rank', '>', '0')]}"/>
+                <field name="truck_id"/>
+                <field name="driver_id"/>
             </xpath>
         </field>
     </record>
