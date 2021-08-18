@@ -96,6 +96,17 @@ class pooplogg_customer(models.Model):
     category = fields.Selection([('customer', 'Customer'), ('partner', 'Partner'), ('manager', 'Manager')], 'Category')
     driver_id = fields.Char()
     wallet = fields.Float(string="Wallet Balance")
+    
+    @api.model
+    def update_partner(self, id):
+        record = self.search([('id', '=', id)])
+        for rec in record:
+            if (rec.driver_id and rec.customer_id):
+                partner = self.env['res.partner'].search([('customer_id', '=', rec.customer_id)])
+                rec.partner_id = partner.id
+            if (rec.truck_id and rec.customer_id):
+                partner = self.env['res.partner'].search([('customer_id', '=', rec.customer_id)])
+                rec.partner_id = partner.id
 
     @api.model
     def set_company(self, id):
@@ -157,13 +168,14 @@ class payment(models.Model):
     customer_id = fields.Char()
     truck_id = fields.Char()
     property_id = fields.Char()
-    property_zone = fields.Char()
     product_type = fields.Char()
     evac_category = fields.Char()
+    default_code = fields.Char()
     payment_method = fields.Char()
     addon = fields.Char()
     addon_amount = fields.Float()
     sewage_volume = fields.Float()
+    discount = fields.Float()
     
     @api.model
     def update_payment(self, id):
@@ -198,12 +210,11 @@ class payment(models.Model):
         for rec in record:
             if(rec.truck_owner_id and rec.customer_id):
                 category = self.env['product.category'].search([('name', '=', rec.product_type)])
-                zone = self.env['property.zone'].search([('name', '=', rec.property_zone)])
                 evac_categ = self.env['evacuation.category'].search([('name', '=', rec.evac_category)])
-                product = self.env['product.product'].search([('categ_id', '=', category.id),('zone','=', zone.id),('evac_categ', '=', evac_categ.id)])
+                product = self.env['product.product'].search([('categ_id', '=', category.id),('default_code','=', rec.default_code),('evac_categ', '=', evac_categ.id)])
                 journal = self.env['account.journal'].search([('company_id', '=', 2), ('code', '=', 'INV')])
                 invoice_line_ids = []
-                invoice_line_ids.append((0,0,{'product_id':product.id, 'account_id':product.categ_id.property_account_income_categ_id.id, 'price_unit':product.lst_price, 'quantity':1}))
+                invoice_line_ids.append((0,0,{'product_id':product.id, 'account_id':product.categ_id.property_account_income_categ_id.id, 'price_unit':product.lst_price, 'quantity':1, 'discount':rec.discount}))
                 
                 if (rec.addon):
                     invoice_line_ids.append((0,0,{'name':rec.addon, 'account_id':product.categ_id.property_account_income_categ_id.id, 'price_unit':rec.addon_amount, 'quantity':1}))
@@ -253,15 +264,14 @@ class payment(models.Model):
             if(rec.truck_owner_id and rec.customer_id):
                 truck_owner = self.env['res.partner'].search([('customer_id', '=', rec.truck_owner_id)])
                 category = self.env['product.category'].search([('name', '=', rec.product_type)])
-                zone = self.env['property.zone'].search([('name', '=', rec.property_zone)])
                 evac_categ = self.env['evacuation.category'].search([('name', '=', rec.evac_category)])
-                product = self.env['product.product'].search([('categ_id', '=', category.id),('zone','=', zone.id),('evac_categ', '=', evac_categ.id)])
+                product = self.env['product.product'].search([('categ_id', '=', category.id),('default_code','=', rec.default_code),('evac_categ', '=', evac_categ.id)])
                 vat = round((product.lst_price * 0.075), 2)
                 net = product.lst_price - vat
                 partner_earning = product.partner_price
                 partner_account = truck_owner.property_account_payable_id.id
                 loggycraft = self.env['res.partner'].search([('name', '=', 'Loggykraft')])    
-                loggycraft_earning = round(((net - partner_earning) * 0.3), 2)
+                loggycraft_earning = round(((net - partner_earning) * 0.4), 2)
                 loggycraft_account = loggycraft.property_account_payable_id.id
                 vat_account = self.env['account.account'].search([('name', '=', 'VAT Payable')])
                 
